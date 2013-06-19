@@ -135,13 +135,13 @@ public class IBDataConnector implements EWrapper{
 		Bar bar = getBar(symbol, hr, min, sec);
 		return (bar != null) ? bar.close : -1;
 	}
-	public double getVolume(String symbol, int hr, int min, int sec)
+	public long getVolume(String symbol, int hr, int min, int sec)
 	{
 		Bar bar = getBar(symbol, hr, min, sec);
 		return (bar != null) ? bar.volume : -1;
 	}
 	
-	public Bar getBar(String symbol, int hr, int min, int sec)
+	private Bar getBar(String symbol, int hr, int min, int sec)
 	{
 		Integer tickerId = tickerIds.get(symbol);
 		if(tickerId != null && data.get(tickerId) != null)
