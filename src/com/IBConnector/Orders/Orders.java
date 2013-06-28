@@ -10,6 +10,10 @@ public class Orders {
 	public Orders() { this.orderUpdates = new OrderUpdates();	}
 	public Orders(int uniqueOrderId) { this.orderUpdates = new OrderUpdates(uniqueOrderId);	}
 
+	/**
+	 * for debugging purposes prints all order updates to console, default is printing off
+	 * @param print
+	 */
 	public void printAllOrderUpdates(boolean print) { printUpdates = print;	}
 	
 	// orderStatus methods
@@ -22,6 +26,8 @@ public class Orders {
 	public OrderUpdate getOrderStatus(int orderId) 		{	return orderUpdates.getOrderStatus(orderId);}
 	public OrderUpdate[] getAllOrderStatus() 			{ 	return orderUpdates.getAllOrderStatus();	}
 	public int[] getAllOrderIds() 						{	return orderUpdates.getAllOrderIds();		}
+	
+	
 	
 	// openOrder methods
 	public void updateOpenOrder(OpenOrder update) 		{ 	

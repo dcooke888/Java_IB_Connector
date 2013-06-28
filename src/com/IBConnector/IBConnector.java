@@ -204,7 +204,15 @@ public class IBConnector implements EWrapper{
 	 *          Place and Receive Order Updates
 	 * -----------------------------------------------------
 	 */
+	
 	public void printAllOrderUpdates(boolean print) { orders.printAllOrderUpdates(print);	}
+	
+	/**
+	 * places orders through the eclientSocket if the orderId has been set
+	 * @param contract
+	 * @param order
+	 * @return returns the integer value of the orderId
+	 */
 	public int placeOrder(Contract contract, Order order) {
 		int id = getOrderId();
 		if(id != -1) {
@@ -217,12 +225,27 @@ public class IBConnector implements EWrapper{
 		}
 	}
 	
+	/**
+	 * places a market order 
+	 * @param symbol
+	 * @param action
+	 * @param numShares
+	 * @return returns the integer value of the orderId
+	 */
 	public int placeMKTOrder(String symbol, OrderAction action, int numShares) {
 		Contract contract = getStockContract(symbol);
 		Order order = getOrder(OrderType.MKT, action, numShares);
 		return placeOrder(contract, order);
 	}
 	
+	/**
+	 * places a limit order
+	 * @param symbol
+	 * @param action
+	 * @param numShares
+	 * @param limitPrice
+	 * @return returns the integer value of the orderId
+	 */
 	public int placeLMTOrder(String symbol, OrderAction action, int numShares, double limitPrice) {
 		Contract contract = getStockContract(symbol);
 		Order order = getOrder(OrderType.LMT, action, numShares);
@@ -230,6 +253,13 @@ public class IBConnector implements EWrapper{
 		return placeOrder(contract, order);
 	}
 	
+	/**
+	 * creates a new basic interactive brokers order
+	 * @param orderType
+	 * @param action
+	 * @param numShares
+	 * @return new Order
+	 */
 	private Order getOrder(OrderType orderType, OrderAction action, int numShares) {
 		Order order = new Order();
 		order.m_orderType = orderType.toString();
@@ -271,6 +301,8 @@ public class IBConnector implements EWrapper{
 	}
 	
 	
+	
+	
 	/*
  	 * -----------------------------------------------------
 	 *          Retrieve Order Status and Open Orders
@@ -286,6 +318,8 @@ public class IBConnector implements EWrapper{
 	public int[] getAllOpenOrderIds() 					{ 	return orders.getAllOpenOrderIds();		}
 	
 	
+	
+	
 	/*
  	 * -----------------------------------------------------
 	 *            Request and Receive Account Updates
@@ -294,20 +328,25 @@ public class IBConnector implements EWrapper{
 	public String getAccountName() {
 		String portfolioAccountName = portfolio.getAccountName();
 		String accountAccountName = account.getAccountName();
-		if(portfolio.getAccountName().equalsIgnoreCase(account.getAccountName())) return portfolio.getAccountName();
-		else return new StringBuilder("AccountNames Not Equal: Portfolio accountName: ").append(portfolioAccountName).append(", Account accountName: ").append(accountAccountName).toString();
+		if(portfolio.getAccountName().equalsIgnoreCase(account.getAccountName())) {
+			return portfolio.getAccountName();
+		}
+		else {
+			return new StringBuilder("AccountNames Not Equal: Portfolio accountName: ").append(portfolioAccountName).append(", Account accountName: ").append(accountAccountName).toString();
+		}
 	}
-	public void reqAccountUpdates() 	{	client.reqAccountUpdates(true, "");	}
+	public void reqAccountUpdates() 	{	client.reqAccountUpdates(true, "");		}
 	public void stopAccountUpdates() 	{	client.reqAccountUpdates(false, "");	}
+	
 	public void printAllUpdates(boolean print) {
 		account.printUpdates(print);
 		portfolio.printUpdates(print);
 	}
+	
 	public String reqlastUpdateTime()	{	
 		if(lastAccountUpdateTime != null) return lastAccountUpdateTime;	
 		else return "Request Account Updates before calling: No account updates have been received";
 	}
-	
 
 	@Override
 	public void updateAccountTime(String timeStamp)	{	lastAccountUpdateTime = timeStamp;	}
@@ -315,7 +354,6 @@ public class IBConnector implements EWrapper{
 	@Override
 	public void updateAccountValue(String key, String value, String currency, String accountName) {
 		account.updateAccountDetail(new AccountDetail(key, value, currency, accountName));
-		
 	}
 	
 	@Override
@@ -323,7 +361,6 @@ public class IBConnector implements EWrapper{
 			double averageCost, double unrealizedPNL, double realizedPNL, String accountName) {
 		portfolio.updatePosition(new Position(contract, positionSize, marketPrice, marketValue,
 				averageCost, unrealizedPNL, realizedPNL, accountName));
-		
 	}
 	
 	
@@ -342,7 +379,7 @@ public class IBConnector implements EWrapper{
 
 	/*
  	 * -----------------------------------------------------
-	 *         	 Retrieve Portfolio Position Info
+	 *         	 Retrieve Portfolio Info
 	 * -----------------------------------------------------
 	 */
 	public Position[] getAllPositions() 			{ 	return portfolio.getAllPositions();		}
@@ -351,13 +388,13 @@ public class IBConnector implements EWrapper{
 	public void printAllPositions() 				{	portfolio.printAllPositions();			}
 	public String[] getAllSymbols() 				{ 	return portfolio.getAllSymbols();		}
 	
-	public Contract getContract(String symbol) 	{ return portfolio.getContract(symbol);			}
-	public int getPositionSize(String symbol)	{ return portfolio.getPositionSize(symbol);		}
-	public double getMarketPrice(String symbol)	{ return portfolio.getMarketPrice(symbol);		}
-	public double getMarketValue(String symbol) { return portfolio.getMarketValue(symbol);		}
-	public double getAverageCost(String symbol) { return portfolio.getAverageCost(symbol);		}
-	public double getUnrealizedPNL(String symbol) { return portfolio.getUnrealizedPNL(symbol);	}
-	public double getRealizedPNL(String symbol) { return portfolio.getRealizedPNL(symbol);		}
+	public Contract getContract(String symbol) 		{ 	return portfolio.getContract(symbol);		}
+	public int getPositionSize(String symbol)		{ 	return portfolio.getPositionSize(symbol);	}
+	public double getMarketPrice(String symbol)		{ 	return portfolio.getMarketPrice(symbol);	}
+	public double getMarketValue(String symbol) 	{ 	return portfolio.getMarketValue(symbol);	}
+	public double getAverageCost(String symbol) 	{ 	return portfolio.getAverageCost(symbol);	}
+	public double getUnrealizedPNL(String symbol) 	{ 	return portfolio.getUnrealizedPNL(symbol);	}
+	public double getRealizedPNL(String symbol) 	{ 	return portfolio.getRealizedPNL(symbol);	}
 	
 
 	/*
@@ -423,10 +460,10 @@ public class IBConnector implements EWrapper{
 		test.waitForUserInput();
 		
 		// subscribe and print recorded data example
-//		debugSubscribeAndPrintData(test);
+		debugSubscribeAndPrintData(test);
 
 		// request portfolio and account updates and print out results
-//		accountAndPortfolioDebug(test);
+		debugAccountAndPortfolio(test);
 		
 		// place order and listen to updates
 		debugOrders(test);
@@ -436,6 +473,9 @@ public class IBConnector implements EWrapper{
 		test.waitForUserInput();
 	}
 	
+	/**
+	 * subscribes to data for the requested symbol, then prints the data after a user clicks the button
+	 */
 	private static void debugSubscribeAndPrintData(IBConnector test) {
 		
 		test.subscribeToSymbol("GOOG");
@@ -444,15 +484,23 @@ public class IBConnector implements EWrapper{
 		test.waitForUserInput();
 	}
 	
+	/**
+	 * requests the program prints all Account and Portfolio updates, then starts listening to account / portfolio updates
+	 */
 	private static void debugAccountAndPortfolio(IBConnector test) {
 		test.printAllUpdates(true);
 		test.reqAccountUpdates();
 		test.waitForUserInput();
 	}
 	
+	/**
+	 * requests program to print all order Updates, then places a MKT Order and Limit Order
+	 * @param test
+	 */
 	private static void debugOrders(IBConnector test) {
 		test.printAllOrderUpdates(true);
-		test.placeMKTOrder("GOOG", OrderAction.BUY, 10);
+		test.placeMKTOrder("GOOG", OrderAction.SELL, 10);
+		test.placeLMTOrder("C", OrderAction.BUY, 10, 1);
 		test.waitForUserInput();
 	}
 	

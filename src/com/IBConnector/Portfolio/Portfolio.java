@@ -12,6 +12,11 @@ public class Portfolio {
 	
 	public Portfolio() {	this.accountName = "NOT_SET";	}
 	public Portfolio(String accountName) { this.accountName = accountName;	}
+	
+	/**
+	 * for debugging purposes prints all position updates to console, default is printing off
+	 * @param print
+	 */
 	public void printUpdates(boolean printPositionUpdates) { this.printPositionUpdates = printPositionUpdates;	}
 	
 	public void updatePosition(Position position) {
@@ -42,6 +47,12 @@ public class Portfolio {
 		return symbols;
 	}
 	
+	
+	/*
+	 * -----------------------------------------------
+	 * 	  Retrieval Methods for a specific contract
+	 * -----------------------------------------------
+	 */
 	public Contract getContract(String symbol) 	{ return positions.get(symbol).contract;		}
 	public int getPositionSize(String symbol)	{ return positions.get(symbol).positionSize;	}
 	public double getMarketPrice(String symbol)	{ return positions.get(symbol).marketPrice;		}

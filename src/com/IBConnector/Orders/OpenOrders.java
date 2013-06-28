@@ -6,6 +6,9 @@ public class OpenOrders {
 	private HashMap<Integer, OpenOrder> openOrders = new HashMap<Integer, OpenOrder>();
 	private volatile boolean updateComplete = true;
 	
+	/*
+	 * Update open orders
+	 */
 	public void updateOpenOrder(OpenOrder update) {
 		if(updateComplete) {
 			openOrders.clear();
@@ -16,6 +19,9 @@ public class OpenOrders {
 	
 	public void updateOpenOrderEnd() {	updateComplete = true;	}
 	
+	/*
+	 * Open Orders Retrieval
+	 */
 	public int getNumOpenOrders()				{ 	return openOrders.size();		}
 	public OpenOrder getOpenOrder(int orderId) 	{	return openOrders.get(orderId);	}
 	public OpenOrder[] getAllOpenOrders() 		{	

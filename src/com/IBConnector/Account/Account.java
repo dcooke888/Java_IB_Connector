@@ -11,6 +11,11 @@ public class Account {
 	public Account() {	this.accountName = "NOT_SET";	}
 	public Account(String accountName) { this.accountName = accountName;	}
 	
+	
+	/**
+	 * for debugging purposes prints all account updates to console, default is printing off
+	 * @param print
+	 */
 	public void printUpdates(boolean printAccountUpdates) { this.printAccountUpdates  = printAccountUpdates;	}
 	public void updateAccountDetail(AccountDetail detail) {
 		if(printAccountUpdates) detail.print();
@@ -27,10 +32,7 @@ public class Account {
 	public AccountDetail[] getAllAccountInfo() {
 		return accountInfo.values().toArray(new AccountDetail[accountInfo.size()]);
 	}
-	
-	public AccountDetail getAccountInfo(String key) { return accountInfo.get(key); }
-	public String getValue(String key) { return accountInfo.get(key).value; }
-	public String getCurrency(String key) { return accountInfo.get(key).currency; }
+
 	public String getAccountName() { 
 		if(accountName.equals("NOT_SET")) return "AccountName not set";
 		else return accountName;
@@ -47,4 +49,13 @@ public class Account {
 			detail.print();
 		}
 	}
+	
+	/*
+	 * -------------------------------------------------------
+	 * 	  Retrieval Methods for a specific Account parameter
+	 * -------------------------------------------------------
+	 */
+	public AccountDetail getAccountInfo(String key) { return accountInfo.get(key); }
+	public String getValue(String key) { return accountInfo.get(key).value; }
+	public String getCurrency(String key) { return accountInfo.get(key).currency; }
 }
