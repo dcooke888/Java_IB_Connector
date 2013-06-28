@@ -4,6 +4,7 @@ package com.IBConnector.Data;
 import java.util.TreeMap;
 
 
+
 /**
  * barHolder is a data structure used to hold bar updates from Interactive brokers
  * @author dylancooke34

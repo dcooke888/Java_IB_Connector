@@ -13,6 +13,7 @@ public class Bar {
 	public final double wap;
 	public final int count;
 	
+	
 	public Bar(String symbol, int reqId, long time, double open, double high, double low, double close, long volume, double wap, int count)
 	{
 		this.symbol = symbol;
