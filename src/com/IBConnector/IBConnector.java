@@ -1,4 +1,4 @@
-package com.IBConnector.Data;
+package com.IBConnector;
 
 import java.util.Calendar;
 import java.util.GregorianCalendar;
@@ -6,6 +6,18 @@ import java.util.HashMap;
 import java.util.Scanner;
 import java.util.TimeZone;
 
+import com.IBConnector.Account.Account;
+import com.IBConnector.Account.AccountDetail;
+import com.IBConnector.Data.Bar;
+import com.IBConnector.Data.BarHolder;
+import com.IBConnector.Orders.OpenOrder;
+import com.IBConnector.Orders.OrderAction;
+import com.IBConnector.Orders.OrderStatus;
+import com.IBConnector.Orders.OrderUpdate;
+import com.IBConnector.Orders.OrderType;
+import com.IBConnector.Orders.Orders;
+import com.IBConnector.Portfolio.Portfolio;
+import com.IBConnector.Portfolio.Position;
 import com.ib.client.CommissionReport;
 import com.ib.client.Contract;
 import com.ib.client.ContractDetails;
@@ -17,18 +29,40 @@ import com.ib.client.OrderState;
 import com.ib.client.UnderComp;
 
 
-public class IBDataConnector implements EWrapper{
+public class IBConnector implements EWrapper{
 	public static final int DEFAULT_CLIENT_ID = 0;
 	public static final int DEFAULT_PORT = 7496;
 	public static final String DEFAULT_HOST = "localHost";
 	EClientSocket client = new EClientSocket(this);
 	int uniqueId = 1;
-	HashMap<Integer, BarHolder> data = new HashMap<Integer, BarHolder>();
-	HashMap<Integer, String> symbols = new HashMap<Integer, String>();
-	HashMap<String, Integer> tickerIds = new HashMap<String, Integer>();
+	private HashMap<Integer, BarHolder> data = new HashMap<Integer, BarHolder>();
+	private HashMap<Integer, String> symbols = new HashMap<Integer, String>();
+	private HashMap<String, Integer> tickerIds = new HashMap<String, Integer>();
+	private final Account account;
+	private final Portfolio portfolio;
+	private Orders orders = null;
 	private static int msgDisplayLevel = 0;
 	private final long dayStartTimeSec = getDayStartTimeSec();
-
+	private String lastAccountUpdateTime = null;
+	
+	/*
+	 * -----------------------------------------------------
+	 *     				Constructors
+	 * -----------------------------------------------------
+	 */
+	public IBConnector() {
+		this.account = new Account();	
+		this.portfolio = new Portfolio();
+		this.orders = new Orders();
+	}
+	public IBConnector(String accountName) {
+		this.account = new Account(accountName);
+		this.portfolio = new Portfolio(accountName);
+		this.orders = new Orders();
+	}
+	
+	
+	
 	
 	/*
 	 * -----------------------------------------------------
@@ -38,7 +72,10 @@ public class IBDataConnector implements EWrapper{
 	public void connect()									{	connect(DEFAULT_CLIENT_ID, DEFAULT_PORT, DEFAULT_HOST);	}
 	public void connect(int clientId) 						{	connect(clientId, DEFAULT_PORT, DEFAULT_HOST);			}
 	public void connect(int clientId, int port)				{	connect(clientId, port, DEFAULT_HOST);					}
-	public void connect(int clientId, int port, String host){	client.eConnect(host, port, clientId);					}
+	public void connect(int clientId, int port, String host){
+		client.eConnect(host, port, clientId);
+		client.reqIds(1);
+	}
 	public void disconnect()								{ 	client.eDisconnect();			}
 	public boolean isConnected() 							{ 	return client.isConnected();	}
 	
@@ -163,12 +200,173 @@ public class IBDataConnector implements EWrapper{
 	
 	
 	/*
+ 	 * -----------------------------------------------------
+	 *          Place and Receive Order Updates
+	 * -----------------------------------------------------
+	 */
+	public void printAllOrderUpdates(boolean print) { orders.printAllOrderUpdates(print);	}
+	public int placeOrder(Contract contract, Order order) {
+		int id = getOrderId();
+		if(id != -1) {
+			order.m_orderId = id;
+			client.placeOrder( id, contract, order);
+			return id;
+		} else {
+			System.out.println("ERROR: Order ID not set -> Order Not sent, check connection to IB and try again");
+			return -1;
+		}
+	}
+	
+	public int placeMKTOrder(String symbol, OrderAction action, int numShares) {
+		Contract contract = getStockContract(symbol);
+		Order order = getOrder(OrderType.MKT, action, numShares);
+		return placeOrder(contract, order);
+	}
+	
+	public int placeLMTOrder(String symbol, OrderAction action, int numShares, double limitPrice) {
+		Contract contract = getStockContract(symbol);
+		Order order = getOrder(OrderType.LMT, action, numShares);
+		order.m_lmtPrice = limitPrice;
+		return placeOrder(contract, order);
+	}
+	
+	private Order getOrder(OrderType orderType, OrderAction action, int numShares) {
+		Order order = new Order();
+		order.m_orderType = orderType.toString();
+		order.m_action = action.toString();
+		order.m_totalQuantity = numShares;
+		return order;
+	}
+	
+	private int getOrderId() {
+		if(orders.getNextOrderId() == -1) {
+			client.reqIds(1);
+			return -1;
+		} else {
+			return orders.getNextOrderId();
+		}
+	}
+	
+	
+	@Override
+	public void nextValidId(int orderId) {
+		if(orders == null) orders = new Orders(orderId);
+		else orders.setUniqueOrderId(orderId);
+	}
+	
+	
+	@Override
+	public void openOrder(int orderId, Contract contract, Order order, OrderState orderState ) {
+		orders.updateOpenOrder(new OpenOrder(orderId, contract, order, orderState));
+	}
+
+	@Override
+	public void openOrderEnd() {	orders.updateOpenOrderEnd();	}
+
+	@Override
+	public void orderStatus(int orderId, String status, int filled, int remaining, 
+			double avgFillPrice, int permId, int parentId, double lastFillPrice, int clientId, String whyHeld) {
+		orders.updateOrderStatus(new OrderUpdate(orderId, OrderStatus.fromLabel(status), filled, remaining,
+				avgFillPrice, permId, parentId, lastFillPrice, clientId, whyHeld));
+	}
+	
+	
+	/*
+ 	 * -----------------------------------------------------
+	 *          Retrieve Order Status and Open Orders
+	 * -----------------------------------------------------
+	 */
+	public int getNextOrderId() 						{ 	return orders.getNextOrderId();			}
+	public OrderUpdate getOrderStatus(int orderId) 		{	return orders.getOrderStatus(orderId);	}
+	public OrderUpdate[] getAllOrderStatus() 			{ 	return orders.getAllOrderStatus();		}
+	public int[] getAllOrderIds() 						{	return orders.getAllOrderIds();			}
+	public int getNumOpenOrders()						{ 	return orders.getNumOpenOrders();		}
+	public OpenOrder getOpenOrder(int orderId) 			{	return orders.getOpenOrder(orderId);	}
+	public OpenOrder[] getAllOpenOrders() 				{	return orders.getAllOpenOrders();		}
+	public int[] getAllOpenOrderIds() 					{ 	return orders.getAllOpenOrderIds();		}
+	
+	
+	/*
+ 	 * -----------------------------------------------------
+	 *            Request and Receive Account Updates
+	 * -----------------------------------------------------
+	 */
+	public String getAccountName() {
+		String portfolioAccountName = portfolio.getAccountName();
+		String accountAccountName = account.getAccountName();
+		if(portfolio.getAccountName().equalsIgnoreCase(account.getAccountName())) return portfolio.getAccountName();
+		else return new StringBuilder("AccountNames Not Equal: Portfolio accountName: ").append(portfolioAccountName).append(", Account accountName: ").append(accountAccountName).toString();
+	}
+	public void reqAccountUpdates() 	{	client.reqAccountUpdates(true, "");	}
+	public void stopAccountUpdates() 	{	client.reqAccountUpdates(false, "");	}
+	public void printAllUpdates(boolean print) {
+		account.printUpdates(print);
+		portfolio.printUpdates(print);
+	}
+	public String reqlastUpdateTime()	{	
+		if(lastAccountUpdateTime != null) return lastAccountUpdateTime;	
+		else return "Request Account Updates before calling: No account updates have been received";
+	}
+	
+
+	@Override
+	public void updateAccountTime(String timeStamp)	{	lastAccountUpdateTime = timeStamp;	}
+
+	@Override
+	public void updateAccountValue(String key, String value, String currency, String accountName) {
+		account.updateAccountDetail(new AccountDetail(key, value, currency, accountName));
+		
+	}
+	
+	@Override
+	public void updatePortfolio(Contract contract, int positionSize, double marketPrice, double marketValue,
+			double averageCost, double unrealizedPNL, double realizedPNL, String accountName) {
+		portfolio.updatePosition(new Position(contract, positionSize, marketPrice, marketValue,
+				averageCost, unrealizedPNL, realizedPNL, accountName));
+		
+	}
+	
+	
+	
+	/*
+ 	 * -----------------------------------------------------
+	 *           	 Retrieve Account Info
+	 * -----------------------------------------------------
+	 */
+	public AccountDetail[] getAllAccountInfo() 		{ 	return account.getAllAccountInfo();	}
+	public AccountDetail getAccountInfo(String key) { 	return account.getAccountInfo(key);	}
+	public String getValue(String key) 				{ 	return account.getValue(key); 		}
+	public String getCurrency(String key) 			{ 	return account.getCurrency(key); 	}
+	public void printAccountInfo(String key) 		{ 	account.printAccountInfo(key);		}
+	public void printAllAccountInfo() 				{	account.printAllAccountInfo();		}
+
+	/*
+ 	 * -----------------------------------------------------
+	 *         	 Retrieve Portfolio Position Info
+	 * -----------------------------------------------------
+	 */
+	public Position[] getAllPositions() 			{ 	return portfolio.getAllPositions();		}
+	public Position getPosition(String symbol) 		{ 	return portfolio.getPosition(symbol);	}
+	public void printPosition(String symbol) 		{ 	portfolio.printPosition(symbol); 		}
+	public void printAllPositions() 				{	portfolio.printAllPositions();			}
+	public String[] getAllSymbols() 				{ 	return portfolio.getAllSymbols();		}
+	
+	public Contract getContract(String symbol) 	{ return portfolio.getContract(symbol);			}
+	public int getPositionSize(String symbol)	{ return portfolio.getPositionSize(symbol);		}
+	public double getMarketPrice(String symbol)	{ return portfolio.getMarketPrice(symbol);		}
+	public double getMarketValue(String symbol) { return portfolio.getMarketValue(symbol);		}
+	public double getAverageCost(String symbol) { return portfolio.getAverageCost(symbol);		}
+	public double getUnrealizedPNL(String symbol) { return portfolio.getUnrealizedPNL(symbol);	}
+	public double getRealizedPNL(String symbol) { return portfolio.getRealizedPNL(symbol);		}
+	
+
+	/*
 	 * -----------------------------------------------------
 	 *            Message Display preferences
 	 * -----------------------------------------------------
 	 */
-	public int getMsgDisplayLevel() 					{	return IBDataConnector.msgDisplayLevel;				}
-	public void setMsgDisplayLevel(int msgDisplayLevel) { 	IBDataConnector.msgDisplayLevel = msgDisplayLevel;	}
+	public int getMsgDisplayLevel() 					{	return IBConnector.msgDisplayLevel;				}
+	public void setMsgDisplayLevel(int msgDisplayLevel) { 	IBConnector.msgDisplayLevel = msgDisplayLevel;	}
 	
 	@Override
 	public void connectionClosed() {
@@ -220,16 +418,44 @@ public class IBDataConnector implements EWrapper{
 	 */
 	public static void main(String[] args)
 	{
-		IBDataConnector test = new IBDataConnector();
+		IBConnector test = new IBConnector();
 		test.connect();
 		test.waitForUserInput();
-		test.subscribeToSymbol("GOOG");
-		test.waitForUserInput();
-		test.printData();
+		
+		// subscribe and print recorded data example
+//		debugSubscribeAndPrintData(test);
+
+		// request portfolio and account updates and print out results
+//		accountAndPortfolioDebug(test);
+		
+		// place order and listen to updates
+		debugOrders(test);
+		
 		test.waitForUserInput();
 		test.disconnect();
 		test.waitForUserInput();
 	}
+	
+	private static void debugSubscribeAndPrintData(IBConnector test) {
+		
+		test.subscribeToSymbol("GOOG");
+		test.waitForUserInput();
+		test.printData();
+		test.waitForUserInput();
+	}
+	
+	private static void debugAccountAndPortfolio(IBConnector test) {
+		test.printAllUpdates(true);
+		test.reqAccountUpdates();
+		test.waitForUserInput();
+	}
+	
+	private static void debugOrders(IBConnector test) {
+		test.printAllOrderUpdates(true);
+		test.placeMKTOrder("GOOG", OrderAction.BUY, 10);
+		test.waitForUserInput();
+	}
+	
 	/**
 	 * prints all recorded bars for all data values that were subscribed
 	 */
@@ -321,30 +547,7 @@ public class IBDataConnector implements EWrapper{
 		
 	}
 
-	@Override
-	public void nextValidId(int arg0) {
-		// TODO Auto-generated method stub
-		
-	}
 
-	@Override
-	public void openOrder(int arg0, Contract arg1, Order arg2, OrderState arg3) {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public void openOrderEnd() {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public void orderStatus(int arg0, String arg1, int arg2, int arg3,
-			double arg4, int arg5, int arg6, double arg7, int arg8, String arg9) {
-		// TODO Auto-generated method stub
-		
-	}
 
 	@Override
 	public void receiveFA(int arg0, String arg1) {
@@ -417,19 +620,6 @@ public class IBDataConnector implements EWrapper{
 	}
 
 	@Override
-	public void updateAccountTime(String arg0) {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public void updateAccountValue(String arg0, String arg1, String arg2,
-			String arg3) {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
 	public void updateMktDepth(int arg0, int arg1, int arg2, int arg3,
 			double arg4, int arg5) {
 		// TODO Auto-generated method stub
@@ -445,13 +635,6 @@ public class IBDataConnector implements EWrapper{
 
 	@Override
 	public void updateNewsBulletin(int arg0, int arg1, String arg2, String arg3) {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public void updatePortfolio(Contract arg0, int arg1, double arg2,
-			double arg3, double arg4, double arg5, double arg6, String arg7) {
 		// TODO Auto-generated method stub
 		
 	}
