@@ -10,6 +10,8 @@ import com.IBConnector.Account.Account;
 import com.IBConnector.Account.AccountDetail;
 import com.IBConnector.Data.Bar;
 import com.IBConnector.Data.BarHolder;
+import com.IBConnector.Data.PriceSize;
+import com.IBConnector.Data.TOBUpdater;
 import com.IBConnector.Orders.OpenOrder;
 import com.IBConnector.Orders.OrderAction;
 import com.IBConnector.Orders.OrderStatus;
@@ -33,11 +35,24 @@ public class IBConnector implements EWrapper{
 	public static final int DEFAULT_CLIENT_ID = 0;
 	public static final int DEFAULT_PORT = 7496;
 	public static final String DEFAULT_HOST = "localHost";
+	
+	public static final int TICK_PRICE_BID = 1;
+	public static final int TICK_PRICE_ASK = 2;
+	public static final int TICK_SIZE_BID = 0;
+	public static final int TICK_SIZE_ASK = 3;
+	
 	EClientSocket client = new EClientSocket(this);
 	int uniqueId = 1;
-	private HashMap<Integer, BarHolder> data = new HashMap<Integer, BarHolder>();
+	
+	// realTimeBar Updates
+	private HashMap<Integer, BarHolder> barData = new HashMap<Integer, BarHolder>();
 	private HashMap<Integer, String> symbols = new HashMap<Integer, String>();
-	private HashMap<String, Integer> tickerIds = new HashMap<String, Integer>();
+	private HashMap<String, Integer> barIds = new HashMap<String, Integer>();
+	
+	// tick udpates
+	private HashMap<String, Integer> tickIds = new HashMap<String, Integer>();
+	TOBUpdater TOB = new TOBUpdater();
+	
 	private final Account account;
 	private final Portfolio portfolio;
 	private Orders orders = null;
@@ -87,17 +102,70 @@ public class IBConnector implements EWrapper{
 	 */
 	
 	/**
+	 * subscribe to tick price, size updates for desired symbol
+	 * @param symbol
+	 */
+	public void subscribeToTickUpdates(String symbol) {
+		if(tickIds.get(symbol) == null) {
+			int tickerId = uniqueId++;
+			Contract contract = getStockContract(symbol);
+			client.reqMktData(tickerId, contract, "", false);
+			tickIds.put(symbol, tickerId);
+			symbols.put(tickerId, symbol);
+		}
+	}
+	
+	/**
+	 * unsubscribe to tick price, size updates for desired symbol
+	 * @param symbol
+	 */
+	public void unsubscribeToTickUpdates(String symbol) {
+		Integer tickerId = tickIds.get(symbol);
+		if(tickerId != null) {
+			client.cancelMktData(tickerId);
+			TOB.removeBidAsk(symbol);
+			tickIds.remove(symbol);
+			symbols.remove(tickerId);
+		}
+	}
+	
+	/**
+	 * IB calls tick price to provides price updates for designated tickerId request
+	 */
+	@Override
+	public void tickPrice(int tickerId, int field, double price, int canAutoExecute){
+		if(field == TICK_PRICE_BID || field == TICK_PRICE_ASK) {
+			String symbol = symbols.get(tickerId);
+			int updateType = field;
+			TOB.notifyPriceChange(symbol, updateType, price);
+		}
+	}
+
+	/**
+	 * IB calls tickSize to provide size updates for designated tickerID request
+	 */
+	@Override
+	public void tickSize(int tickerId, int field, int size) {
+		if(field == TICK_SIZE_BID|| field == TICK_SIZE_ASK) {
+			String symbol = symbols.get(tickerId);
+			int updateType = field;
+			TOB.notifySizeChange(symbol, updateType, size);
+		}
+	}
+	
+	
+	/**
 	 * called by user to subscribe to realTimeBars for a symbol
 	 * @param symbol
 	 */
-	public void subscribeToSymbol(String symbol)
+	public void subscribeToRealTimeBars(String symbol)
 	{
-		if(tickerIds.get(symbol) == null)
+		if(barIds.get(symbol) == null)
 		{
 			int tickerId = uniqueId++;
 			Contract contract = getStockContract(symbol);
 			client.reqRealTimeBars(tickerId, contract, 5, "TRADES", true);
-			tickerIds.put(symbol, tickerId);
+			barIds.put(symbol, tickerId);
 			symbols.put(tickerId, symbol);
 		}
 	}
@@ -106,15 +174,15 @@ public class IBConnector implements EWrapper{
 	 * called by user to unsubscribe from realTimeBars for a symbol
 	 * @param symbol
 	 */
-	public void unsubscribeFromSymbol(String symbol)
+	public void unsubscribeFromRealTimeBars(String symbol)
 	{
-		Integer tickerId = tickerIds.get(symbol);
+		Integer tickerId = barIds.get(symbol);
 		if(tickerId != null)
 		{
-			client.cancelRealTimeBars(tickerIds.get(symbol));
-			data.remove(tickerIds.get(symbol));
-			symbols.remove(tickerIds.get(symbol));
-			tickerIds.remove(symbol);
+			client.cancelRealTimeBars(barIds.get(symbol));
+			barData.remove(barIds.get(symbol));
+			symbols.remove(barIds.get(symbol));
+			barIds.remove(symbol);
 		}
 	}
 	
@@ -124,11 +192,11 @@ public class IBConnector implements EWrapper{
 	@Override
 	public void realtimeBar(int reqId, long time, double open, double high, double low,
 			double close, long volume, double wap, int count) {
-		BarHolder holder = data.get(reqId);
+		BarHolder holder = barData.get(reqId);
 		if(holder == null) holder = new BarHolder(symbols.get(reqId));
 		Bar bar = new Bar(holder.symbol, reqId, time, open, high, low, close, volume, wap, count);
 		holder.addBar(bar);
-		data.put(reqId, holder);
+		barData.put(reqId, holder);
 	}
 	
 	/**
@@ -151,6 +219,20 @@ public class IBConnector implements EWrapper{
 	 *            Methods to Retrieve Price Data
 	 * -----------------------------------------------------
 	 */
+	public double getLatestBid(String symbol) {
+		PriceSize priceSize = TOB.getBestBid(symbol);
+		return (priceSize == null) ? -1 : priceSize.getPrice();
+	}
+	
+	public double getLatestAsk(String symbol) {
+		PriceSize priceSize = TOB.getBestAsk(symbol);
+		return (priceSize == null) ? -1 : priceSize.getPrice();
+	}
+	
+	public double getLatestMidPrice(String symbol) {
+		return TOB.getMidPrice(symbol);
+	}
+	
 	public double getOpenPrice(String symbol, int hr, int min, int sec)
 	{
 		Bar bar = getBar(symbol, hr, min, sec);
@@ -180,10 +262,10 @@ public class IBConnector implements EWrapper{
 	
 	private Bar getBar(String symbol, int hr, int min, int sec)
 	{
-		Integer tickerId = tickerIds.get(symbol);
-		if(tickerId != null && data.get(tickerId) != null)
+		Integer tickerId = barIds.get(symbol);
+		if(tickerId != null && barData.get(tickerId) != null)
 		{
-			Bar bar = data.get(tickerId).getBar(dayStartTimeSec + hr * 3600 + min * 60 + sec);
+			Bar bar = barData.get(tickerId).getBar(dayStartTimeSec + hr * 3600 + min * 60 + sec);
 			if(bar != null) return bar;
 			else
 			{
@@ -388,7 +470,6 @@ public class IBConnector implements EWrapper{
 	public void printAllPositions() 				{	portfolio.printAllPositions();			}
 	public String[] getAllSymbols() 				{ 	return portfolio.getAllSymbols();		}
 	
-	public Contract getContract(String symbol) 		{ 	return portfolio.getContract(symbol);		}
 	public int getPositionSize(String symbol)		{ 	return portfolio.getPositionSize(symbol);	}
 	public double getMarketPrice(String symbol)		{ 	return portfolio.getMarketPrice(symbol);	}
 	public double getMarketValue(String symbol) 	{ 	return portfolio.getMarketValue(symbol);	}
@@ -478,7 +559,7 @@ public class IBConnector implements EWrapper{
 	 */
 	private static void debugSubscribeAndPrintData(IBConnector test) {
 		
-		test.subscribeToSymbol("GOOG");
+		test.subscribeToRealTimeBars("GOOG");
 		test.waitForUserInput();
 		test.printData();
 		test.waitForUserInput();
@@ -507,7 +588,7 @@ public class IBConnector implements EWrapper{
 	/**
 	 * prints all recorded bars for all data values that were subscribed
 	 */
-	public void printData()	{	for(BarHolder barHolder: data.values()) barHolder.printAllBars();	}
+	public void printData()	{	for(BarHolder barHolder: barData.values()) barHolder.printAllBars();	}
 	
 	/**
 	 * simple scanner that allows the user to control the pace of the program
@@ -639,18 +720,6 @@ public class IBConnector implements EWrapper{
 	public void tickOptionComputation(int arg0, int arg1, double arg2,
 			double arg3, double arg4, double arg5, double arg6, double arg7,
 			double arg8, double arg9) {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public void tickPrice(int arg0, int arg1, double arg2, int arg3) {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public void tickSize(int arg0, int arg1, int arg2) {
 		// TODO Auto-generated method stub
 		
 	}
