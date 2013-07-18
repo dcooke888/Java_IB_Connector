@@ -5,12 +5,14 @@ import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.Scanner;
 import java.util.TimeZone;
-
 import com.IBConnector.Account.Account;
 import com.IBConnector.Account.AccountDetail;
 import com.IBConnector.Data.Bar;
 import com.IBConnector.Data.BarHolder;
 import com.IBConnector.Data.PriceSize;
+import com.IBConnector.Data.SnapShot;
+import com.IBConnector.Data.SnapShotHolder;
+import com.IBConnector.Data.SnapShotTimer;
 import com.IBConnector.Data.TOBUpdater;
 import com.IBConnector.Orders.OpenOrder;
 import com.IBConnector.Orders.OrderAction;
@@ -52,6 +54,8 @@ public class IBConnector implements EWrapper{
 	// tick udpates
 	private HashMap<String, Integer> tickIds = new HashMap<String, Integer>();
 	TOBUpdater TOB = new TOBUpdater();
+	SnapShotHolder holder = new SnapShotHolder();
+	HashMap<Integer, SnapShotTimer> timers = new HashMap<Integer, SnapShotTimer>();
 	
 	private final Account account;
 	private final Portfolio portfolio;
@@ -126,6 +130,41 @@ public class IBConnector implements EWrapper{
 			TOB.removeBidAsk(symbol);
 			tickIds.remove(symbol);
 			symbols.remove(tickerId);
+		}
+	}
+	/**
+	 * starts taking snapshots at the specified interval in seconds
+	 * @param secsPerSnap
+	 */
+	public void startTakingSnapShots(int secsPerSnap) {
+		SnapShotTimer timer = timers.get(secsPerSnap);
+		if(timer == null) {
+			timer = new SnapShotTimer(secsPerSnap, TOB, holder);
+			new Thread(timer).start();
+			timers.put(secsPerSnap, timer);
+		}
+		
+	}
+	
+	/**
+	 * stops taking snapshots at the specified interval in seconds
+	 * @param secsPerSnap
+	 */
+	public void stopTakingSnapShots(int secsPerSnap) {
+		SnapShotTimer timer = timers.get(secsPerSnap);
+		if(timer != null) {
+			timer.stopSnaps();
+			timers.remove(secsPerSnap);
+		}
+	}
+	
+	/**
+	 * stops taking all snapshots at the specified interval in seconds
+	 * @param secsPerSnap
+	 */
+	public void stopAllSnapShots() {
+		for(Integer delay: timers.keySet()) {
+			stopTakingSnapShots(delay);
 		}
 	}
 	
@@ -231,6 +270,18 @@ public class IBConnector implements EWrapper{
 	
 	public double getLatestMidPrice(String symbol) {
 		return TOB.getMidPrice(symbol);
+	}
+	
+	public TOBUpdater getTOBUpdater() {
+		return TOB;
+	}
+	
+	public SnapShot[] getAllSymbolSnapShots(String symbol) {
+		return holder.getAllSymbolSnapShots(symbol);
+	}
+	
+	public SnapShot getRecentSnapShot(String symbol) {
+		return holder.getRecentSnapShot(symbol);
 	}
 	
 	public double getOpenPrice(String symbol, int hr, int min, int sec)
