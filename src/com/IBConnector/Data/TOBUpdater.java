@@ -72,7 +72,7 @@ public class TOBUpdater {
 	
 	public SnapShot getSnapShot(String symbol) {
 		PriceSize bid = bestBid.get(symbol);
-		PriceSize ask = bestBid.get(symbol);
+		PriceSize ask = bestAsk.get(symbol);
 		if(isPriceSizeSet(bid) && isPriceSizeSet(ask) ) {
 			return new SnapShot(bid, ask, getTime());
 		}

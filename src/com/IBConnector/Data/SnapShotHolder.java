@@ -14,6 +14,10 @@ public class SnapShotHolder {
 		allSnapShots.put(snapShot.symbol, snapShots);
 	}
 	
+	public SnapShotHolder getSnapShotsHolder() {
+		return this;
+	}
+	
 	public SnapShot[] getAllSymbolSnapShots(String symbol) {
 		ArrayDeque<SnapShot> snapShots = allSnapShots.get(symbol);
 		if(snapShots != null) return snapShots.toArray(new SnapShot[snapShots.size()]);
@@ -22,5 +26,10 @@ public class SnapShotHolder {
 	
 	public SnapShot getRecentSnapShot(String symbol) {
 		return allSnapShots.get(symbol).getLast();
+	}
+	
+	public void printAllSnapshots(String symbol) {
+		ArrayDeque<SnapShot> snapShots = allSnapShots.get(symbol);
+		if(snapShots != null) for(SnapShot snapShot: snapShots) snapShot.printSnapShot();
 	}
 }

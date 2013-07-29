@@ -284,6 +284,10 @@ public class IBConnector implements EWrapper{
 		return holder.getRecentSnapShot(symbol);
 	}
 	
+	public SnapShotHolder getSnapShotHolder() {
+		return holder.getSnapShotsHolder();
+	}
+	
 	public double getOpenPrice(String symbol, int hr, int min, int sec)
 	{
 		Bar bar = getBar(symbol, hr, min, sec);
@@ -591,24 +595,41 @@ public class IBConnector implements EWrapper{
 		test.connect();
 		test.waitForUserInput();
 		
-		// subscribe and print recorded data example
-		debugSubscribeAndPrintData(test);
+		// subscribe to realtimedata and print recorded data from each minute
+		debugSubscribeTickPriceSizeUpdatesAndPrintData(test);
+	
+		// subscribe to realtimebars and print recorded data example
+//		debugSubscribeRealTimeBarsAndPrintData(test);
 
 		// request portfolio and account updates and print out results
-		debugAccountAndPortfolio(test);
+//		debugAccountAndPortfolio(test);
 		
 		// place order and listen to updates
-		debugOrders(test);
+//		debugOrders(test);
 		
 		test.waitForUserInput();
 		test.disconnect();
 		test.waitForUserInput();
 	}
 	
+	
+	/**
+	 * subscribes to tickprice/size updates for requested symbol, then prints data after user clicks the button
+	 */
+	private static void debugSubscribeTickPriceSizeUpdatesAndPrintData(IBConnector test) {
+		System.out.println("debugging and subscribingToTickUpdates");
+		test.subscribeToTickUpdates("GOOG");
+		test.subscribeToTickUpdates("AAPL");
+		test.startTakingSnapShots(30);
+		test.waitForUserInput();
+		test.printAllSnapShots("GOOG");
+		test.printAllSnapShots("AAPL");
+		test.waitForUserInput();
+	}
 	/**
 	 * subscribes to data for the requested symbol, then prints the data after a user clicks the button
 	 */
-	private static void debugSubscribeAndPrintData(IBConnector test) {
+	private static void debugSubscribeRealTimeBarsAndPrintData(IBConnector test) {
 		
 		test.subscribeToRealTimeBars("GOOG");
 		test.waitForUserInput();
@@ -634,6 +655,10 @@ public class IBConnector implements EWrapper{
 		test.placeMKTOrder("GOOG", OrderAction.SELL, 10);
 		test.placeLMTOrder("C", OrderAction.BUY, 10, 1);
 		test.waitForUserInput();
+	}
+	
+	public void printAllSnapShots(String symbol) {
+		holder.printAllSnapshots(symbol);
 	}
 	
 	/**
